@@ -4,12 +4,14 @@ const express = require("express")
 const cors = require("cors")
 const pool = require("./config/db")
 const authRoutes = require("./routes/authRoutes")
+const skillRoutes = require("./routes/skillRoutes")
 
 const app = express()
 
 app.use(cors())
 app.use(express.json())
 app.use("/api/auth", authRoutes)
+app.use("/api/skills", skillRoutes)
 
 app.get("/", (req, res) => {
     res.send("AI Career Platform API running")
