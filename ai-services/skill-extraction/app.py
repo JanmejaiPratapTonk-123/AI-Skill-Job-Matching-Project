@@ -19,3 +19,7 @@ def extract_skills(data: dict):
             found_skills.append(skill)
 
     return {"skills": found_skills}
+
+@app.get("/")
+def home():
+    return {"message": "AI Skill Extraction Service Running"}
