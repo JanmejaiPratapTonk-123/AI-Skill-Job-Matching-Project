@@ -42,6 +42,9 @@ app.get("/test-db", async (req, res) => {
 const resumeRoutes = require("./routes/resumeRoutes")
 app.use("/api/resume", resumeRoutes)
 
+const jobRoutes = require("./routes/jobRoutes")
+app.use("/api/jobs", jobRoutes)
+
 const PORT = 5000
 
 app.listen(PORT, () => {
