@@ -5,45 +5,77 @@ const authMiddleware = require("../middleware/authMiddleware")
 
 router.get("/recommend", authMiddleware, async (req, res) => {
 
-    const userId = req.user.userId
+    try {
 
-    // Get user skills
-    const userSkillsResult = await pool.query(
-        "SELECT skill_id FROM user_skills WHERE user_id = $1",
-        [userId]
-    )
+        const userId = req.user.userId
 
-    const userSkills = userSkillsResult.rows.map(r => r.skill_id)
+        const result = await pool.query(`
+            SELECT 
+                j.id,
+                j.title,
+                j.company,
 
-    // Get all jobs
-    const jobsResult = await pool.query("SELECT * FROM jobs")
+                COUNT(js.skill_id) AS total_skills,
 
-    const recommendations = []
+                COUNT(us.skill_id) AS matched_skills,
 
-    for (const job of jobsResult.rows) {
+                COALESCE(
+                    ARRAY_REMOVE(
+                        ARRAY_AGG(s.name) FILTER (
+                            WHERE us.skill_id IS NULL
+                        ),
+                        NULL
+                    ),
+                    '{}'
+                ) AS missing_skills,
 
-        const jobSkillsResult = await pool.query(
-            "SELECT skill_id FROM job_skills WHERE job_id = $1",
-            [job.id]
-        )
+                COALESCE(
+                    ARRAY_REMOVE(
+                        ARRAY_AGG(DISTINCT c.name) FILTER (
+                            WHERE us.skill_id IS NULL
+                        ),
+                        NULL
+                    ),
+                    '{}'
+                ) AS recommended_courses
 
-        const jobSkills = jobSkillsResult.rows.map(r => r.skill_id)
+            FROM jobs j
 
-        const matched = jobSkills.filter(skill => userSkills.includes(skill))
+            JOIN job_skills js ON j.id = js.job_id
+            JOIN skills s ON js.skill_id = s.id
 
-        const score = (matched.length / jobSkills.length) * 100
+            LEFT JOIN user_skills us 
+                ON js.skill_id = us.skill_id 
+                AND us.user_id = $1
 
-        recommendations.push({
-            job: job.title,
-            company: job.company,
-            match_score: Math.round(score)
+            LEFT JOIN courses c 
+                ON c.skill_id = s.id
+
+            GROUP BY j.id
+        `, [userId])
+
+        const recommendations = result.rows.map(job => {
+            const score = job.total_skills == 0
+                ? 0
+                : (job.matched_skills / job.total_skills) * 100
+
+            return {
+                job: job.title,
+                company: job.company,
+                match_score: Math.round(score),
+                missing_skills: job.missing_skills,
+                recommended_courses: job.recommended_courses
+            }
         })
+
+        recommendations.sort((a, b) => b.match_score - a.match_score)
+
+        res.json(recommendations)
+
+    } catch (err) {
+        console.error(err)
+        res.status(500).json({ error: "Server error" })
     }
-
-    // Sort by best match
-    recommendations.sort((a, b) => b.match_score - a.match_score)
-
-    res.json(recommendations)
 })
 
 module.exports = router
